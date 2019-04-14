@@ -16,9 +16,9 @@
 namespace osm {
 namespace query {
 struct Query::Impl final {
-    static constexpr const char * const OUTPUT_FILE = "osm_response.osm";
+    static constexpr const char * const OUTPUT_FILE = ".osm";
     static constexpr const char * const INTERPRETER_OVERPASS_DATA_URL = "https://www.overpass-api.de/api/interpreter?data=";
-    Impl(std::string ql_query);
+    Impl(std::string out_file, std::string ql_query);
     virtual ~Impl();
 
     inline bool is_sub_delimiter(const char c) const;
@@ -34,22 +34,23 @@ private:
     Impl& operator=(const Impl&) = delete;
     Impl& operator=(Impl&&) = delete;
 private:
+    std::string out_file_;
     std::string ql_query_;   
 };
 
-std::shared_ptr<Query> Query::Make(std::string ql_query_) {
-    return std::make_shared<Query>(std::move(ql_query_));
+std::shared_ptr<Query> Query::Make(std::string out_file, std::string ql_query_) {
+    return std::make_shared<Query>(std::move(out_file),std::move(ql_query_));
 }
 
-Query::Impl::Impl(std::string ql_query) : ql_query_(std::move(ql_query)) {
+Query::Impl::Impl(std::string out_file, std::string ql_query) : out_file_(std::move(out_file)), ql_query_(std::move(ql_query)) {
     std::string query_head = std::string(INTERPRETER_OVERPASS_DATA_URL);
     ql_query_ = query_head + ql_query_;
 }
 
 Query::Impl::~Impl() {}
 
-Query::Query(std::string ql_query_)
-: pimpl_(new Impl(std::move(ql_query_))) {}
+Query::Query(std::string out_file, std::string ql_query_)
+: pimpl_(new Impl(std::move(out_file), std::move(ql_query_))) {}
 
 Query::~Query() {}
 
@@ -136,8 +137,9 @@ void Query::Impl::Send() {
     std::string query = Encode();
     curlpp::options::WriteFunctionCurlFunction callback(writer::Callback); // c style, can improve
     FILE *file = stdout;
-    if(OUTPUT_FILE != nullptr) {
-        file = fopen(OUTPUT_FILE, "wb");
+    std::string output_file = out_file_ + std::string(OUTPUT_FILE);
+    if(!out_file_.empty()) {
+        file = fopen(output_file.c_str(), "wb");
         if(file == nullptr) {
             throw std::runtime_error("File is null");
         }
@@ -145,7 +147,6 @@ void Query::Impl::Send() {
     curlpp::OptionTrait<void *, CURLOPT_WRITEDATA> data(file);        
     request.setOpt(callback);
     request.setOpt(data);
-    std::cout << query << std::endl;
     
 	request.setOpt(new curlpp::options::Url(query));
 	request.setOpt(new curlpp::options::Verbose(true));

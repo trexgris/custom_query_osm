@@ -2,14 +2,12 @@
 #include <iostream>
 
 int main() {
-    std::string query;
+    std::string outfile, query;
+    std::cout << "Enter output file name (will be of type xml): " << std::endl;
+    std::getline(std::cin, outfile);
     std::cout << "Enter Query: ";
     std::getline(std::cin, query);
-
-    std::cout << "------------" << std::endl;
-        std::cout << query << std::endl;
-
-    auto q = osm::query::Query::Make(query);
+    auto q = osm::query::Query::Make(std::move(outfile), std::move(query));
     q->Send();
 return 0;
 }
