@@ -8,7 +8,7 @@ int main() {
     std::cout << "Enter Query: ";
     std::getline(std::cin, query);
     auto q = osm::query::Query::Make(std::move(outfile), std::move(query));
-    q->Send();
+    q->Send(osm::query::Query::WriteToFile::YES);
 return 0;
 }
 

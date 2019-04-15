@@ -1,5 +1,4 @@
 #include "../include/Query.hpp"
-#include "../include/writer/Writer.hpp"
 #include <curlpp/cURLpp.hpp>
 #include <curlpp/Easy.hpp>
 #include <curlpp/Options.hpp>
@@ -12,30 +11,32 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <iostream>
+#include <fstream>
 
 namespace osm {
 namespace query {
 struct Query::Impl final {
-    static constexpr const char * const OUTPUT_FILE = ".osm";
+   // static constexpr const char * const OUTPUT_FILE = ".osm";
     static constexpr const char * const INTERPRETER_OVERPASS_DATA_URL = "https://www.overpass-api.de/api/interpreter?data=";
     Impl(std::string out_file, std::string ql_query);
     virtual ~Impl();
-
+    std::string Encode() const;
+    void Send(WriteToFile opt);   
+private:
     inline bool is_sub_delimiter(const char c) const;
     inline bool is_gen_delimiter(const char c) const;
     inline bool is_unreserved(const char c) const;
 
-    std::string Encode() const;
-    void Send();
-private:
     Impl() = delete;    
     Impl(const Impl&) = delete;
     Impl(Impl&&) = delete;
     Impl& operator=(const Impl&) = delete;
     Impl& operator=(Impl&&) = delete;
-private:
+public:
     std::string out_file_;
-    std::string ql_query_;   
+    std::string ql_query_;
+    std::string response_;   
 };
 
 std::shared_ptr<Query> Query::Make(std::string out_file, std::string ql_query_) {
@@ -54,11 +55,10 @@ Query::Query(std::string out_file, std::string ql_query_)
 
 Query::~Query() {}
 
-std::string Query::Encode() const {
+std::string Query::GetLastResponse() const {
     if(!pimpl_) throw std::runtime_error("Pimpl is null.");
-    return pimpl_->Encode();
+    return pimpl_->response_;
 }
-
 
  bool Query::Impl::is_sub_delimiter(const char c) const {
 switch (c)
@@ -125,32 +125,28 @@ std::string Query::Impl::Encode() const {
     return escaped.str();
 }
 
-void Query::Send() {
+void Query::Send(WriteToFile opt) {
     if(!pimpl_) throw std::runtime_error("Pimpl is null.");
-    pimpl_->Send();
+    pimpl_->Send(opt);
 }
 
-void Query::Impl::Send() {
+void Query::Impl::Send(WriteToFile opt) {
     curlpp::Cleanup cleaner;
     curlpp::Easy request;
+    std::ostringstream ostr_response;
     // overpass QL
     std::string query = Encode();
-    curlpp::options::WriteFunctionCurlFunction callback(writer::Callback); // c style, can improve
-    FILE *file = stdout;
-    std::string output_file = out_file_ + std::string(OUTPUT_FILE);
-    if(!out_file_.empty()) {
-        file = fopen(output_file.c_str(), "wb");
-        if(file == nullptr) {
-            throw std::runtime_error("File is null");
-        }
-    }
-    curlpp::OptionTrait<void *, CURLOPT_WRITEDATA> data(file);        
-    request.setOpt(callback);
-    request.setOpt(data);
-    
+
 	request.setOpt(new curlpp::options::Url(query));
 	request.setOpt(new curlpp::options::Verbose(true));
-	request.perform();
+    request.setOpt(new curlpp::options::WriteStream(&ostr_response));
+	request.perform(); //blocks
+    response_ = ostr_response.str();
+    if(opt == WriteToFile::YES) {
+        std::ofstream output_file;
+        output_file.open(out_file_, std::ios::out);
+        output_file <<response_;
+    }
 }
 
 }
